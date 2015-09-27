@@ -1,0 +1,103 @@
+---
+title: "Course Project"
+author: "Nadezda Gushchina"
+date: "8 Sep 2015"
+output: html_document
+---
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible 
+to collect a large amount of data about personal activity relatively 
+inexpensively. 
+These type of devices are part of the quantified self movement – a group of 
+enthusiasts who take measurements about themselves regularly to improve their 
+health, to find patterns in their behavior, or because they are tech geeks. One 
+thing that people regularly do is quantify how much of a particular activity they 
+do, but they rarely quantify how well they do it. In this project, your goal will 
+be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly 
+in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting 
+Exercise Dataset). 
+The goal of the project is to predict the manner in which they did the exercise. 
+This is the "classe" variable in the training set. 
+
+#Loading the data
+Download the train and test data and read into "train" and "test" objects
+```{r load}
+        download.file(
+url="http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile= "train.csv", method = "curl")
+        train<-read.csv("train.csv",na.strings=c("NA","#DIV/0!",""))
+           download.file(
+url="http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile= "test.csv", method = "curl")
+       test<-read.csv("test.csv",na.strings=c("NA","#DIV/0!",""))     
+```
+
+#Review and clean the data
+
+First we will look at the data and calculate the number of missing values per 
+variable in the training set
+```{r clean}
+       dim(train)
+        a<-colSums(is.na(train)) #calculate the number of missing values per variable
+        table(a)
+```
+As we see 60 variables in the training set have no missing values while the rest have most of the values missing. Therefore we will only select the variables which have no missing data in the dataset. We also remove the first column with the ID.
+We will select the same variables in the test set (except classe variable)
+```{r cleandata}
+        trainclean<-train[,a==0] 
+        trainclean<-trainclean[,-1]
+        dim(trainclean)
+        testclean<-test[,colnames(trainclean)[1:58]]
+        dim(testclean)
+```
+#Split the train data into training and testing samples
+Use caret package to partition data into training (60%) and testing (40%) sets.
+```{r partitioning}
+       library("caret")
+       inTrain<-createDataPartition(y=trainclean$classe,p=0.6,list=FALSE)
+        training<-trainclean[inTrain,]
+        testing<-trainclean[-inTrain,]
+```
+
+#Predict with decision tree
+```{r tree}
+        library(rpart)
+        library(rpart.plot)
+        library(rattle)
+        set.seed(33)
+        modelFit <- rpart(classe ~ ., data=training, method="class")
+        fancyRpartPlot(modelFit)
+        prediction<-predict(modelFit, testing, type = "class")
+        confusionMatrix(prediction, testing$classe)
+```   
+
+Accuracy with decision tree is 88%. Out of sample error is 12%.
+
+#Predict with random forests
+We will now use random forests setting ntree to 100.
+```{r random_forests}
+        library(randomForest)
+        set.seed(33)
+        modFit <- train(classe~.,data=training,method="rf",ntree=100)
+        prediction<-predict(modFit, testing)
+        confusionMatrix(prediction, testing$classe)
+```  
+The accuracy of random forests is much higher than decision tree (99.96%). 
+Out of sample error is 0.04%.
+#Predict based on test set
+Now we predict based on the test set using the random forest which proved to 
+provide higher accuracy.
+```{r prediction}
+        answers<-predict(modFit, testclean)
+```  
+#Generate the file for submission
+```{r submission}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+```
